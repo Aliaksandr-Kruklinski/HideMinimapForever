@@ -1,6 +1,6 @@
 local addonName, ns = ...
 local panel, category
-local checks, sliders = {}, {}
+local checks, sliders, sliderTitles = {}, {}, {}
 local updating = false
 
 -- Controls
@@ -67,6 +67,7 @@ local function slider(parent, key, label, x, y, min, max, step, unit, descriptio
         ns.core:Refresh()
     end)
     sliders[key] = s
+    sliderTitles[key] = title
 end
 
 function ns.RefreshOptions()
@@ -87,6 +88,9 @@ function ns.RefreshOptions()
     -- Only Minimap idle opacity is incompatible with complete-hide mode.
     -- Preserve its saved value for when complete hide is unchecked again.
     if sliders.minimapFadeLevel then
+        if sliderTitles.minimapFadeLevel then
+            sliderTitles.minimapFadeLevel:SetText(db.completelyHide and "Idle opacity (disabled)" or "Idle opacity")
+        end
         if db.completelyHide then
             sliders.minimapFadeLevel:Disable()
         else
