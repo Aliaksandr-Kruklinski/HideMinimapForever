@@ -1,9 +1,13 @@
-local addonName, ns = ...
+local _, ns = ...
+local settings = ns.Settings
 local panel, category
 local checks, sliders, sliderTitles = {}, {}, {}
 local updating = false
 
--- Controls
+-- ============================================================================
+-- UI helpers and control factories
+-- ============================================================================
+
 local function text(parent, value, size, color)
     local t = parent:CreateFontString(nil, "OVERLAY")
     t:SetFont(STANDARD_TEXT_FONT, size or 13, "")
@@ -43,7 +47,9 @@ local function checkbox(parent, key, label, y, description)
     checks[key] = cb
 end
 
-local function slider(parent, key, label, x, y, min, max, step, unit, description)
+local function slider(parent, key, label, x, y, unit, description)
+    local spec = assert(settings[key], "Missing setting: " .. key)
+    local min, max, step = spec.min, spec.max, spec.step
     local title = text(parent, label, 12)
     title:SetPoint("TOPLEFT", x, y)
     local value = text(parent, "", 12, { .40, .85, 1 })
@@ -70,19 +76,18 @@ local function slider(parent, key, label, x, y, min, max, step, unit, descriptio
     sliderTitles[key] = title
 end
 
+-- ============================================================================
+-- Options state synchronization
+-- ============================================================================
+
 function ns.RefreshOptions()
     if not panel or not ns.GetDB() then return end
     local db = ns.GetDB()
     updating = true
     for key, cb in pairs(checks) do cb:SetChecked(db[key]) end
     for key, sliderFrame in pairs(sliders) do
-        local value = tonumber(db[key])
-        if value == nil then
-            value = (key == "idleDelay" and 2)
-                or (key:find("FadeDuration") and 0.35)
-                or 0
-            db[key] = value
-        end
+        local spec = settings[key]
+        local value = tonumber(db[key]) or (spec and spec.default) or 0
         sliderFrame:SetValue(value)
     end
     -- Only Minimap idle opacity is incompatible with complete-hide mode.
@@ -102,6 +107,10 @@ function ns.RefreshOptions()
     end
     updating = false
 end
+
+-- ============================================================================
+-- Options panel creation
+-- ============================================================================
 
 function ns.BuildOptions()
     if panel then return end
@@ -135,20 +144,20 @@ function ns.BuildOptions()
     checkbox(content, "showWhileMoving", "Show while moving; hide while stationary", -142,
         "Show the map while moving. After stopping, the idle timer begins before fade-out.")
     checkbox(content, "showButton", "Show minimap button", -177,
-        "Show the stealth-icon button attached to Minimap. Left-click toggles; right-click opens settings; middle-click pins; drag moves.")
+        "Show the stealth-icon button attached to Minimap. Left-click toggles; right-click opens settings; drag moves.")
 
     local timing = text(content, "GENERAL TIMING", 13, { .36, .82, 1 })
     timing:SetPoint("TOPLEFT", 36, -225)
-    slider(content, "idleDelay", "Idle delay", 36, -252, 0, 15, .25, " s",
+    slider(content, "idleDelay", "Idle delay", 36, -252, " s",
         "Time after mouse-over ends or movement stops before fading begins.")
 
     local mapHeading = text(content, "MINIMAP", 13, { .36, .82, 1 })
     mapHeading:SetPoint("TOPLEFT", 36, -325)
-    slider(content, "minimapFadeInDuration", "Fade in", 36, -356, 0, 3, .05, " s",
+    slider(content, "minimapFadeInDuration", "Fade in", 36, -356, " s",
         "How long Minimap takes to fade in from its current opacity.")
-    slider(content, "minimapFadeOutDuration", "Fade out", 300, -356, 0, 3, .05, " s",
+    slider(content, "minimapFadeOutDuration", "Fade out", 300, -356, " s",
         "How long Minimap takes to fade out. Complete hide waits only for this animation.")
-    slider(content, "minimapFadeLevel", "Idle opacity", 36, -423, 0, 1, .05, "",
+    slider(content, "minimapFadeLevel", "Idle opacity", 36, -423, "",
         "Sets Minimap idle opacity when complete hide is OFF. When complete hide is ON, Minimap fades to 0% and is hidden; this slider is disabled. Minimap surroundings opacity remains adjustable.")
 
     panel.minimapOpacityHint = text(content,
@@ -157,11 +166,11 @@ function ns.BuildOptions()
 
     local clusterHeading = text(content, "MINIMAP SURROUNDINGS", 13, { .36, .82, 1 })
     clusterHeading:SetPoint("TOPLEFT", 36, -500)
-    slider(content, "clusterFadeInDuration", "Fade in", 36, -531, 0, 3, .05, " s",
+    slider(content, "clusterFadeInDuration", "Fade in", 36, -531, " s",
         "How long the minimap surroundings take to fade in.")
-    slider(content, "clusterFadeOutDuration", "Fade out", 300, -531, 0, 3, .05, " s",
+    slider(content, "clusterFadeOutDuration", "Fade out", 300, -531, " s",
         "How long the minimap surroundings take to fade out. They are never physically hidden.")
-    slider(content, "clusterFadeLevel", "Idle opacity", 36, -598, 0, 1, .05, "",
+    slider(content, "clusterFadeLevel", "Idle opacity", 36, -598, "",
         "Idle opacity of minimap surroundings, without affecting Minimap opacity.")
 
     local note = text(content, "Complete hide affects only Minimap, not its surroundings.", 11, { .60, .69, .78 })
@@ -193,6 +202,10 @@ function ns.BuildOptions()
         panel:Hide()
     end
 end
+
+-- ============================================================================
+-- Options navigation
+-- ============================================================================
 
 function ns.OpenOptions()
     if not panel then return end
