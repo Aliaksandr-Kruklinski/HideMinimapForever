@@ -1,0 +1,19 @@
+## Interface: 16001
+
+## Title: Hide Minimap Forever
+## Notes: Fade or hide the minimap to enjoy the beauty of Azeroth.
+
+## Category-enUS: Minimap
+## IconTexture: Interface\Icons\Ability_Stealth
+
+## Author: apsedianm
+## Version: 1.1.0
+
+## X-Category: Minimap
+## X-License: MIT
+## X-Localizations: enUS
+
+## SavedVariables: HideMinimapForever
+
+Core.lua
+Options.lua
