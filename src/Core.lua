@@ -61,12 +61,49 @@ end
 
 function ns.GetDB() return db end
 
+-- Adapted from the proven LibDBIcon minimap positioning approach.
+-- Round and square minimap layouts require different edge calculations.
+local minimapShapes = {
+    ROUND = {true, true, true, true},
+    SQUARE = {false, false, false, false},
+    ["CORNER-TOPLEFT"] = {true, false, false, false},
+    ["CORNER-TOPRIGHT"] = {false, false, true, false},
+    ["CORNER-BOTTOMLEFT"] = {false, true, false, false},
+    ["CORNER-BOTTOMRIGHT"] = {false, false, false, true},
+    ["SIDE-LEFT"] = {true, true, false, false},
+    ["SIDE-RIGHT"] = {false, false, true, true},
+    ["SIDE-TOP"] = {true, false, true, false},
+    ["SIDE-BOTTOM"] = {false, true, false, true},
+    ["TRICORNER-TOPLEFT"] = {true, true, true, false},
+    ["TRICORNER-TOPRIGHT"] = {true, false, true, true},
+    ["TRICORNER-BOTTOMLEFT"] = {true, true, false, true},
+    ["TRICORNER-BOTTOMRIGHT"] = {false, true, true, true},
+}
+
 local function placeButton()
-    if not button or not Minimap then return end
-    local radians = math.rad(db.buttonAngle)
-    local radius = Minimap:GetWidth() / 2 + 9
+    if not button or not Minimap or not db then return end
+    local angle = math.rad(db.buttonAngle or 210)
+    local x, y = math.cos(angle), math.sin(angle)
+    local quadrant = 1
+    if x < 0 then quadrant = quadrant + 1 end
+    if y > 0 then quadrant = quadrant + 2 end
+
+    local shape = GetMinimapShape and GetMinimapShape() or "ROUND"
+    local roundQuadrants = minimapShapes[shape] or minimapShapes.ROUND
+    -- Standard LibDBIcon places a 31px button ~80px from a 140px map center.
+    -- Use measured dimensions so resized minimaps behave correctly too.
+    local halfWidth, halfHeight = Minimap:GetWidth() / 2, Minimap:GetHeight() / 2
+    local edgeX, edgeY = halfWidth + 10, halfHeight + 10
+    if roundQuadrants[quadrant] then
+        x, y = x * edgeX, y * edgeY
+    else
+        local diagonal = math.sqrt(edgeX * edgeX + edgeY * edgeY)
+        x = clamp(x * diagonal, -edgeX, edgeX)
+        y = clamp(y * diagonal, -edgeY, edgeY)
+    end
+
     button:ClearAllPoints()
-    button:SetPoint("CENTER", Minimap, "CENTER", math.cos(radians) * radius, math.sin(radians) * radius)
+    button:SetPoint("CENTER", Minimap, "CENTER", x, y)
 end
 
 local function restoreMinimap()
@@ -222,18 +259,24 @@ local function createButton()
     button:SetFrameLevel(Minimap:GetFrameLevel() + 5)
     button:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
     button:RegisterForDrag("LeftButton")
+    -- Standard bordered LibDBIcon-style minimap button.
+    local background = button:CreateTexture(nil, "BACKGROUND")
+    background:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
+    background:SetSize(20, 20)
+    background:SetPoint("TOPLEFT", button, "TOPLEFT", 7, -5)
+
     local icon = button:CreateTexture(nil, "ARTWORK")
     icon:SetTexture("Interface\\Icons\\Ability_Stealth")
-    icon:SetSize(19, 19)
-    icon:SetPoint("CENTER")
+    icon:SetTexCoord(.05, .95, .05, .95)
+    icon:SetSize(20, 20)
+    icon:SetPoint("TOPLEFT", button, "TOPLEFT", 7, -5)
+
     local border = button:CreateTexture(nil, "OVERLAY")
     border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
-    border:SetSize(52, 52)
-    border:SetPoint("TOPLEFT", 0, 0)
-    local highlight = button:CreateTexture(nil, "HIGHLIGHT")
-    highlight:SetTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
-    highlight:SetBlendMode("ADD")
-    highlight:SetAllPoints()
+    border:SetSize(53, 53)
+    border:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
+
+    button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
     button:SetScript("OnClick", function(_, mouse)
         if mouse == "RightButton" then
             if ns.OpenOptions then ns.OpenOptions() end
@@ -241,17 +284,25 @@ local function createButton()
         else A:Toggle() end
     end)
     button:SetScript("OnDragStart", function(self)
+        self:LockHighlight()
+        GameTooltip:Hide()
         self:SetScript("OnUpdate", function()
-            local x, y = GetCursorPosition()
-            local scale = UIParent:GetEffectiveScale()
-            x, y = x / scale, y / scale
             local cx, cy = Minimap:GetCenter()
             if not cx then return end
-            db.buttonAngle = math.deg(math.atan2(y - cy, x - cx))
+            local px, py = GetCursorPosition()
+            -- Cursor coordinates are physical screen pixels. Minimap center is
+            -- already expressed in its effective-scale coordinate space.
+            local scale = Minimap:GetEffectiveScale()
+            if not scale or scale == 0 then return end
+            px, py = px / scale, py / scale
+            db.buttonAngle = math.deg(math.atan2(py - cy, px - cx)) % 360
             placeButton()
         end)
     end)
-    button:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
+    button:SetScript("OnDragStop", function(self)
+        self:SetScript("OnUpdate", nil)
+        self:UnlockHighlight()
+    end)
     button:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:AddLine("Hide Minimap Forever", .4, .85, 1)
