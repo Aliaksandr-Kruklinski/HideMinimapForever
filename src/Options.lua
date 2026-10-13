@@ -3,6 +3,7 @@ local panel, category
 local checks, sliders = {}, {}
 local updating = false
 
+-- Controls
 local function text(parent, value, size, color)
     local t = parent:CreateFontString(nil, "OVERLAY")
     t:SetFont(STANDARD_TEXT_FONT, size or 13, "")
@@ -11,24 +12,28 @@ local function text(parent, value, size, color)
     return t
 end
 
-local function backdrop(frame, r, g, b, a)
-    if frame.SetBackdrop then
-        frame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-        frame:SetBackdropColor(r, g, b, a or 1)
-        frame:SetBackdropBorderColor(.19, .27, .36, 1)
-    end
+local function tooltip(frame, heading, description)
+    frame:HookScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine(heading, .4, .85, 1)
+        GameTooltip:AddLine(description, .95, .95, .95, true)
+        GameTooltip:Show()
+    end)
+    frame:HookScript("OnLeave", function() GameTooltip:Hide() end)
 end
 
-local function checkbox(parent, key, label, y, note)
+local function checkbox(parent, key, label, y, description)
     local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
     cb:SetPoint("TOPLEFT", 25, y)
     cb:SetSize(27, 27)
     local title = text(parent, label, 13)
     title:SetPoint("LEFT", cb, "RIGHT", 7, 0)
-    if note then
-        local hint = text(parent, note, 11, { .54, .62, .72 })
-        hint:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -3)
-    end
+    tooltip(cb, label, description)
+    -- Also make the label hoverable/clickable.
+    local hit = CreateFrame("Button", nil, parent)
+    hit:SetAllPoints(title)
+    tooltip(hit, label, description)
+    hit:SetScript("OnClick", function() cb:Click() end)
     cb:SetScript("OnClick", function(self)
         if updating then return end
         ns.GetDB()[key] = not not self:GetChecked()
@@ -37,22 +42,24 @@ local function checkbox(parent, key, label, y, note)
     checks[key] = cb
 end
 
-local function slider(parent, key, label, y, min, max, step, unit)
-    local title = text(parent, label, 13)
-    title:SetPoint("TOPLEFT", 36, y)
+local function slider(parent, key, label, x, y, min, max, step, unit, description)
+    local title = text(parent, label, 12)
+    title:SetPoint("TOPLEFT", x, y)
     local value = text(parent, "", 12, { .40, .85, 1 })
     value:SetPoint("LEFT", title, "RIGHT", 12, 0)
     local s = CreateFrame("Slider", nil, parent, "OptionsSliderTemplate")
-    s:SetPoint("TOPLEFT", 34, y - 27)
-    s:SetSize(320, 18)
+    s:SetPoint("TOPLEFT", x, y - 25)
+    s:SetSize(220, 17)
     s:SetMinMaxValues(min, max)
     s:SetValueStep(step)
     if s.SetObeyStepOnDrag then s:SetObeyStepOnDrag(true) end
     if s.Low then s.Low:SetText(string.format("%g", min)) end
     if s.High then s.High:SetText(string.format("%g", max)) end
     if s.Text then s.Text:SetText("") end
+    tooltip(s, label, description)
     s:SetScript("OnValueChanged", function(self, v)
         local rounded = math.floor(v / step + .5) * step
+        rounded = math.max(min, math.min(max, rounded))
         value:SetText(string.format("%.2f%s", rounded, unit or ""))
         if updating then return end
         ns.GetDB()[key] = rounded
@@ -66,71 +73,92 @@ function ns.RefreshOptions()
     local db = ns.GetDB()
     updating = true
     for key, cb in pairs(checks) do cb:SetChecked(db[key]) end
-    for key, sliderFrame in pairs(sliders) do sliderFrame:SetValue(db[key]) end
-    if panel.fadeRadio then panel.fadeRadio:SetChecked(db.mode == "fade") end
-    if panel.hideRadio then panel.hideRadio:SetChecked(db.mode == "hide") end
+    for key, sliderFrame in pairs(sliders) do
+        local value = tonumber(db[key])
+        if value == nil then
+            value = (key == "idleDelay" and 1.5)
+                or (key:find("FadeDuration") and 0.35)
+                or 0
+            db[key] = value
+        end
+        sliderFrame:SetValue(value)
+    end
     updating = false
 end
 
 function ns.BuildOptions()
     if panel then return end
-    local template = BackdropTemplateMixin and "BackdropTemplate" or nil
-    panel = CreateFrame("Frame", "ForeverMinimapFadeOptions", UIParent, template)
-    panel:SetSize(620, 650)
-    backdrop(panel, .045, .065, .095, .96)
-    panel.name = "Forever Minimap Fade"
+    panel = CreateFrame("Frame", "HideMinimapForeverOptions", UIParent)
+    panel:SetSize(600, 580)
+    panel.name = "Hide Minimap Forever"
 
-    local heading = text(panel, "HIDE Minimap FOREVER", 21, { .36, .82, 1 })
-    heading:SetPoint("TOPLEFT", 26, -24)
-    local subtitle = text(panel, "Minimal map. Full control.", 12, { .56, .65, .76 })
-    subtitle:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -8)
-    local divider = panel:CreateTexture(nil, "ARTWORK")
-    divider:SetTexture("Interface\\Buttons\\WHITE8X8")
-    divider:SetColorTexture(.18, .28, .39, .8)
-    divider:SetPoint("TOPLEFT", 26, -87)
-    divider:SetSize(540, 1)
+    -- Keep the viewport compact; contents can scroll on smaller displays.
+    local scroll = CreateFrame("ScrollFrame", "HideMinimapForeverOptionsScroll", panel, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 6, -8)
+    scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 45)
+    scroll:EnableMouseWheel(true)
+    local content = CreateFrame("Frame", nil, scroll)
+    content:SetSize(550, 760)
+    scroll:SetScrollChild(content)
+    scroll:SetScript("OnMouseWheel", function(self, delta)
+        local range = self:GetVerticalScrollRange()
+        local nextPosition = math.max(0, math.min(range, self:GetVerticalScroll() - delta * 38))
+        self:SetVerticalScroll(nextPosition)
+    end)
 
-    checkbox(panel, "enabled", "Enable automatic minimap fading", -100)
-    checkbox(panel, "showInCombat", "Keep minimap visible in combat", -143)
-    checkbox(panel, "showButton", "Show movable minimap button", -186)
+    local heading = text(content, "HIDE MINIMAP FOREVER", 21, { .36, .82, 1 })
+    heading:SetPoint("TOPLEFT", 26, -16)
+    local subtitle = text(content, "Separate fade-in and fade-out for map and cluster", 12, { .56, .65, .76 })
+    subtitle:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -7)
 
-    local modeLabel = text(panel, "WHEN IDLE", 13, { .36, .82, 1 })
-    modeLabel:SetPoint("TOPLEFT", 36, -238)
-    local function radio(label, x, mode)
-        local rb = CreateFrame("CheckButton", nil, panel, "UIRadioButtonTemplate")
-        rb:SetPoint("TOPLEFT", x, -258)
-        local t = text(panel, label, 13)
-        t:SetPoint("LEFT", rb, "RIGHT", 6, 0)
-        rb:SetScript("OnClick", function()
-            ns.GetDB().mode = mode
-            ns.core:Refresh()
-            ns.RefreshOptions()
-        end)
-        return rb
-    end
-    panel.hideRadio = radio("Fade + fully hide", 33, "hide")
-    panel.fadeRadio = radio("Fade only", 240, "fade")
+    checkbox(content, "enabled", "Enabled", -72,
+        "Disabling the addon immediately restores both minimap layers and stops automatic hiding.")
+    checkbox(content, "completelyHide", "Completely hide map", -107,
+        "Hide Minimap itself only after its fade-out finishes. MinimapCluster never gets hidden by this option. Mouse-over restores Minimap.")
+    checkbox(content, "showWhileMoving", "Show while moving; hide while stationary", -142,
+        "Show the map while moving. After stopping, the idle timer begins before fade-out.")
+    checkbox(content, "showButton", "Show minimap button", -177,
+        "Show the stealth-icon button attached to Minimap. Left-click toggles; right-click opens settings; middle-click pins; drag moves.")
 
-    slider(panel, "idleDelay", "Idle delay", -319, 0, 15, .25, " s")
-    slider(panel, "fadeDuration", "Fade duration", -395, 0, 3, .05, " s")
-    slider(panel, "hiddenAlpha", "Fade-only opacity", -471, 0, .7, .05, "")
+    local timing = text(content, "GENERAL TIMING", 13, { .36, .82, 1 })
+    timing:SetPoint("TOPLEFT", 36, -225)
+    slider(content, "idleDelay", "Idle delay", 36, -252, 0, 15, .25, " s",
+        "Time after mouse-over ends or movement stops before fading begins.")
 
-    local help = text(panel, "Left-click button: toggle  |  Right-click: settings  |  Middle-click: pin", 11, { .60, .69, .78 })
-    help:SetPoint("TOPLEFT", 35, -556)
-    local cmd = text(panel, "Commands: /fmf  /fmf on  /fmf off  /fmf pin  /fmf reset", 11, { .60, .69, .78 })
-    cmd:SetPoint("TOPLEFT", 35, -578)
+    local mapHeading = text(content, "MINIMAP", 13, { .36, .82, 1 })
+    mapHeading:SetPoint("TOPLEFT", 36, -325)
+    slider(content, "minimapFadeInDuration", "Fade in", 36, -356, 0, 3, .05, " s",
+        "How long Minimap takes to fade in from its current opacity.")
+    slider(content, "minimapFadeOutDuration", "Fade out", 300, -356, 0, 3, .05, " s",
+        "How long Minimap takes to fade out. Complete hide waits only for this animation.")
+    slider(content, "minimapFadeLevel", "Idle opacity", 36, -423, 0, 1, .05, "",
+        "Idle opacity of Minimap. A parent cluster opacity also affects its effective visibility.")
+
+    local clusterHeading = text(content, "MINIMAP CLUSTER", 13, { .36, .82, 1 })
+    clusterHeading:SetPoint("TOPLEFT", 36, -500)
+    slider(content, "clusterFadeInDuration", "Fade in", 36, -531, 0, 3, .05, " s",
+        "How long MinimapCluster takes to fade in.")
+    slider(content, "clusterFadeOutDuration", "Fade out", 300, -531, 0, 3, .05, " s",
+        "How long MinimapCluster takes to fade out. It is never physically hidden.")
+    slider(content, "clusterFadeLevel", "Idle opacity", 36, -598, 0, 1, .05, "",
+        "Idle opacity of MinimapCluster, which multiplies the opacity of all its children.")
+
+    local note = text(content, "Complete hide affects only Minimap, not MinimapCluster.", 11, { .60, .69, .78 })
+    note:SetPoint("TOPLEFT", 36, -683)
 
     local reset = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     reset:SetSize(120, 27)
-    reset:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -26, 22)
+    reset:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -32, 10)
     reset:SetText("Reset defaults")
     reset:SetScript("OnClick", function() ns.Reset() end)
 
-    panel:SetScript("OnShow", ns.RefreshOptions)
+    panel:SetScript("OnShow", function()
+        panel:SetHeight(math.max(250, math.min(580, UIParent:GetHeight() - 145)))
+        ns.RefreshOptions()
+    end)
     ns.RefreshOptions()
-
     if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
-        category = Settings.RegisterCanvasLayoutCategory(panel, "Forever Minimap Fade")
+        category = Settings.RegisterCanvasLayoutCategory(panel, "Hide Minimap Forever")
         Settings.RegisterAddOnCategory(category)
     elseif InterfaceOptions_AddCategory then
         InterfaceOptions_AddCategory(panel)
