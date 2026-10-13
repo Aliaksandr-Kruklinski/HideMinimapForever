@@ -24,6 +24,7 @@ local settings = {
 ns.Settings = settings
 
 local db, cluster, hotspot, button
+local initialized = false
 local parts = {}
 local clusterElements = {}
 local elapsedIdle = 0
@@ -66,6 +67,7 @@ local function clearLegacySettings()
 end
 
 local function copyDefaults()
+    -- Called after WoW loads SavedVariables; never replace an existing table.
     HideMinimapForever = type(HideMinimapForever) == "table" and HideMinimapForever or {}
     db = HideMinimapForever
 
@@ -419,11 +421,20 @@ A:SetScript("OnUpdate", function(_, dt)
     update(step)
 end)
 
-A:RegisterEvent("PLAYER_LOGIN")
-A:SetScript("OnEvent", function()
-    copyDefaults()
+-- ADDON_LOADED happens after this addon's SavedVariables are restored.
+-- PLAYER_LOGIN is the fallback and the first point where Blizzard's minimap
+-- frames can safely be initialized. Both event paths are idempotent.
+local function initializeFrames()
+    if initialized then return end
+    if not db then copyDefaults() end
+
     cluster = MinimapCluster or Minimap
-    if not cluster then print("Hide Minimap Forever: minimap frame not found") return end
+    if not cluster or not Minimap then
+        print("Hide Minimap Forever: minimap frame not found")
+        return
+    end
+
+    initialized = true
     collectClusterElements()
     parts = {
         {prefix = "minimap", alpha = 1, target = nil, startAlpha = 1, fadeElapsed = 0},
@@ -434,6 +445,22 @@ A:SetScript("OnEvent", function()
     createButton()
     if ns.BuildOptions then ns.BuildOptions() end
     A:Refresh()
+    if ns.RefreshOptions then ns.RefreshOptions() end
+end
+
+A:RegisterEvent("ADDON_LOADED")
+A:RegisterEvent("PLAYER_LOGIN")
+A:SetScript("OnEvent", function(_, event, loadedAddon)
+    if event == "ADDON_LOADED" then
+        if loadedAddon ~= addonName then return end
+        copyDefaults()
+        A:UnregisterEvent("ADDON_LOADED")
+    elseif event == "PLAYER_LOGIN" then
+        -- Fallback if SavedVariables were not initialized at ADDON_LOADED.
+        if not db then copyDefaults() end
+        initializeFrames()
+        A:UnregisterEvent("PLAYER_LOGIN")
+    end
 end)
 
 

@@ -1,5 +1,4 @@
 local _, ns = ...
-local settings = ns.Settings
 local panel, category
 local checks, sliders, sliderTitles = {}, {}, {}
 local updating = false
@@ -48,7 +47,7 @@ local function checkbox(parent, key, label, y, description)
 end
 
 local function slider(parent, key, label, x, y, unit, description)
-    local spec = assert(settings[key], "Missing setting: " .. key)
+    local spec = assert(ns.Settings and ns.Settings[key], "Missing setting: " .. key)
     local min, max, step = spec.min, spec.max, spec.step
     local title = text(parent, label, 12)
     title:SetPoint("TOPLEFT", x, y)
@@ -86,7 +85,7 @@ function ns.RefreshOptions()
     updating = true
     for key, cb in pairs(checks) do cb:SetChecked(db[key]) end
     for key, sliderFrame in pairs(sliders) do
-        local spec = settings[key]
+        local spec = ns.Settings and ns.Settings[key]
         local value = tonumber(db[key]) or (spec and spec.default) or 0
         sliderFrame:SetValue(value)
     end
