@@ -76,7 +76,7 @@ function ns.RefreshOptions()
     for key, sliderFrame in pairs(sliders) do
         local value = tonumber(db[key])
         if value == nil then
-            value = (key == "idleDelay" and 1.5)
+            value = (key == "idleDelay" and 2)
                 or (key:find("FadeDuration") and 0.35)
                 or 0
             db[key] = value
@@ -108,7 +108,7 @@ function ns.BuildOptions()
 
     local heading = text(content, "HIDE MINIMAP FOREVER", 21, { .36, .82, 1 })
     heading:SetPoint("TOPLEFT", 26, -16)
-    local subtitle = text(content, "Separate fade-in and fade-out for map and cluster", 12, { .56, .65, .76 })
+    local subtitle = text(content, "Fade or hide the minimap to enjoy the beauty of Azeroth.", 12, { .56, .65, .76 })
     subtitle:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -7)
 
     checkbox(content, "enabled", "Enabled", -72,

@@ -5,15 +5,15 @@ ns.core = A
 local defaults = {
     enabled = true,
     completelyHide = true,
-    idleDelay = 1.5,
+    idleDelay = 2,
     showWhileMoving = false,
     showButton = true,
     buttonAngle = 210,
-    minimapFadeInDuration = 0.35,
-    minimapFadeOutDuration = 0.35,
+    minimapFadeInDuration = 0.50,
+    minimapFadeOutDuration = 0.60,
     minimapFadeLevel = 0,
-    clusterFadeInDuration = 0.35,
-    clusterFadeOutDuration = 0.35,
+    clusterFadeInDuration = 0.50,
+    clusterFadeOutDuration = 0.90,
     clusterFadeLevel = 0,
 }
 
