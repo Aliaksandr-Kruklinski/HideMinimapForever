@@ -38,6 +38,7 @@ local function checkbox(parent, key, label, y, description)
         if updating then return end
         ns.GetDB()[key] = not not self:GetChecked()
         ns.core:Refresh()
+        if key == "completelyHide" then ns.RefreshOptions() end
     end)
     checks[key] = cb
 end
@@ -83,6 +84,18 @@ function ns.RefreshOptions()
         end
         sliderFrame:SetValue(value)
     end
+    -- Only Minimap idle opacity is incompatible with complete-hide mode.
+    -- Preserve its saved value for when complete hide is unchecked again.
+    if sliders.minimapFadeLevel then
+        if db.completelyHide then
+            sliders.minimapFadeLevel:Disable()
+        else
+            sliders.minimapFadeLevel:Enable()
+        end
+    end
+    if panel.minimapOpacityHint then
+        panel.minimapOpacityHint:SetShown(db.completelyHide)
+    end
     updating = false
 end
 
@@ -114,7 +127,7 @@ function ns.BuildOptions()
     checkbox(content, "enabled", "Enabled", -72,
         "Disabling the addon immediately restores both minimap layers and stops automatic hiding.")
     checkbox(content, "completelyHide", "Completely hide map", -107,
-        "Hide Minimap itself only after its fade-out finishes. MinimapCluster never gets hidden by this option. Mouse-over restores Minimap.")
+        "After Minimap fades to 0%, it is hidden. This disables only the Minimap idle opacity slider; Minimap surroundings opacity remains independent. Mouse-over restores the map.")
     checkbox(content, "showWhileMoving", "Show while moving; hide while stationary", -142,
         "Show the map while moving. After stopping, the idle timer begins before fade-out.")
     checkbox(content, "showButton", "Show minimap button", -177,
@@ -132,18 +145,22 @@ function ns.BuildOptions()
     slider(content, "minimapFadeOutDuration", "Fade out", 300, -356, 0, 3, .05, " s",
         "How long Minimap takes to fade out. Complete hide waits only for this animation.")
     slider(content, "minimapFadeLevel", "Idle opacity", 36, -423, 0, 1, .05, "",
-        "Idle opacity of Minimap. A parent cluster opacity also affects its effective visibility.")
+        "Sets Minimap idle opacity when complete hide is OFF. When complete hide is ON, Minimap fades to 0% and is hidden; this slider is disabled. Minimap surroundings opacity remains adjustable.")
 
-    local clusterHeading = text(content, "MINIMAP CLUSTER", 13, { .36, .82, 1 })
+    panel.minimapOpacityHint = text(content,
+        "Disabled while Completely hide map is enabled.", 11, { .62, .69, .77 })
+    panel.minimapOpacityHint:SetPoint("TOPLEFT", 36, -478)
+
+    local clusterHeading = text(content, "MINIMAP SURROUNDINGS", 13, { .36, .82, 1 })
     clusterHeading:SetPoint("TOPLEFT", 36, -500)
     slider(content, "clusterFadeInDuration", "Fade in", 36, -531, 0, 3, .05, " s",
-        "How long MinimapCluster takes to fade in.")
+        "How long the minimap surroundings take to fade in.")
     slider(content, "clusterFadeOutDuration", "Fade out", 300, -531, 0, 3, .05, " s",
-        "How long MinimapCluster takes to fade out. It is never physically hidden.")
+        "How long the minimap surroundings take to fade out. They are never physically hidden.")
     slider(content, "clusterFadeLevel", "Idle opacity", 36, -598, 0, 1, .05, "",
-        "Idle opacity of MinimapCluster, which multiplies the opacity of all its children.")
+        "Idle opacity of minimap surroundings, without affecting Minimap opacity.")
 
-    local note = text(content, "Complete hide affects only Minimap, not MinimapCluster.", 11, { .60, .69, .78 })
+    local note = text(content, "Complete hide affects only Minimap, not its surroundings.", 11, { .60, .69, .78 })
     note:SetPoint("TOPLEFT", 36, -683)
 
     local reset = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")

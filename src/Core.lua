@@ -19,6 +19,7 @@ local defaults = {
 
 local db, cluster, hotspot, button
 local parts = {}
+local clusterElements = {}
 local elapsedIdle = 0
 local forcedShown = false
 local internallyHidden = false
@@ -113,14 +114,42 @@ local function restoreMinimap()
     end
 end
 
--- Fade the Minimap and its parent MinimapCluster separately.
--- Their effective on-screen opacity is multiplicative.
+-- Minimap is inside MinimapCluster. Changing the cluster's alpha also
+-- changes the Minimap's *effective* alpha, making its own slider ineffective.
+-- Instead, fade the cluster's other direct children and texture/font regions.
+-- Preserve their original alpha so restoring the UI respects Blizzard styling.
+local function collectClusterElements()
+    clusterElements = {}
+    if not cluster or cluster == Minimap then return end
+
+    -- Protect the direct child containing Minimap, even if another addon
+    -- reparents it into an intermediate container inside MinimapCluster.
+    local minimapBranch = Minimap
+    while minimapBranch and minimapBranch:GetParent() ~= cluster do
+        minimapBranch = minimapBranch:GetParent()
+    end
+
+    local function add(element)
+        if element ~= minimapBranch and element ~= Minimap and element.SetAlpha then
+            clusterElements[#clusterElements + 1] = {
+                frame = element,
+                originalAlpha = element:GetAlpha(),
+            }
+        end
+    end
+    for _, child in ipairs({ cluster:GetChildren() }) do add(child) end
+    for _, region in ipairs({ cluster:GetRegions() }) do add(region) end
+    cluster:SetAlpha(1)  -- keep parent alpha neutral for the Minimap
+end
+
 local function setPartAlpha(part, value)
     part.alpha = clamp(value, 0, 1)
     if part.prefix == "minimap" then
         if Minimap then Minimap:SetAlpha(part.alpha) end
-    elseif cluster then
-        cluster:SetAlpha(part.alpha)
+    else
+        for _, entry in ipairs(clusterElements) do
+            entry.frame:SetAlpha(entry.originalAlpha * part.alpha)
+        end
     end
 end
 
@@ -146,7 +175,7 @@ local function playerMoving()
 end
 
 -- Each layer has its own fade clock and may opt into hiding at fade-out completion.
--- MinimapCluster fades visually only; only Minimap may be physically hidden.
+-- Cluster surroundings fade visually only; only Minimap may be physically hidden.
 local function fadeFrame(part, frame, target, dt, hideAfterFade)
     if not frame then return end
     if part.target ~= target then
@@ -187,7 +216,12 @@ local function update(dt)
     if not idle or not db.completelyHide then restoreMinimap() end
 
     for _, part in ipairs(parts) do
+        -- Complete hide applies to Minimap only: fade to zero before Hide().
+        -- Surrounding cluster elements use independent idle opacity.
         local target = idle and db[part.prefix .. "FadeLevel"] or 1
+        if idle and part.prefix == "minimap" and db.completelyHide then
+            target = 0
+        end
         local frame = part.prefix == "minimap" and Minimap or cluster
         fadeFrame(part, frame, target, dt, part.prefix == "minimap" and idle)
     end
@@ -257,8 +291,9 @@ local function createButton()
     button = CreateFrame("Button", "HideMinimapForeverButton", Minimap)
     button:SetSize(31, 31)
     button:SetFrameLevel(Minimap:GetFrameLevel() + 5)
-    button:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
+    button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     button:RegisterForDrag("LeftButton")
+
     -- Standard bordered LibDBIcon-style minimap button.
     local background = button:CreateTexture(nil, "BACKGROUND")
     background:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
@@ -280,9 +315,9 @@ local function createButton()
     button:SetScript("OnClick", function(_, mouse)
         if mouse == "RightButton" then
             if ns.OpenOptions then ns.OpenOptions() end
-        elseif mouse == "MiddleButton" then A:TogglePin()
         else A:Toggle() end
     end)
+
     button:SetScript("OnDragStart", function(self)
         self:LockHighlight()
         GameTooltip:Hide()
@@ -299,20 +334,23 @@ local function createButton()
             placeButton()
         end)
     end)
+
     button:SetScript("OnDragStop", function(self)
         self:SetScript("OnUpdate", nil)
         self:UnlockHighlight()
     end)
+
     button:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:AddLine("Hide Minimap Forever", .4, .85, 1)
         GameTooltip:AddLine("Left-click: Enable / disable", 1, 1, 1)
         GameTooltip:AddLine("Right-click: Settings", 1, 1, 1)
-        GameTooltip:AddLine("Middle-click: Pin visible / unpin", 1, 1, 1)
         GameTooltip:AddLine("Drag: Move around minimap", 1, 1, 1)
         GameTooltip:Show()
     end)
+
     button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
     placeButton()
 end
 
@@ -329,6 +367,7 @@ A:SetScript("OnEvent", function()
     copyDefaults()
     cluster = MinimapCluster or Minimap
     if not cluster then print("Hide Minimap Forever: minimap frame not found") return end
+    collectClusterElements()
     parts = {
         {prefix = "minimap", alpha = 1, target = nil, startAlpha = 1, fadeElapsed = 0},
         {prefix = "cluster", alpha = 1, target = nil, startAlpha = 1, fadeElapsed = 0},
