@@ -109,32 +109,58 @@ local function restoreMinimap()
     end
 end
 
--- Minimap is inside MinimapCluster. Changing the cluster's alpha also
--- changes the Minimap's *effective* alpha, making its own slider ineffective.
--- Instead, fade the cluster's other direct children and texture/font regions.
--- Preserve their original alpha so restoring the UI respects Blizzard styling.
+-- Fade surroundings without fading the Minimap through any of its parents.
+-- MinimapCluster.MinimapContainer can contain additional UI (coordinates,
+-- day/night indicator) alongside the Minimap. Collect those siblings and
+-- regions too, but never change the container's alpha or hide it.
+-- Preserve original alpha so disabling the addon restores Blizzard styling.
 local function collectClusterElements()
     clusterElements = {}
     if not cluster or cluster == Minimap then return end
 
-    -- Protect the direct child containing Minimap, even if another addon
-    -- reparents it into an intermediate container inside MinimapCluster.
-    local minimapBranch = Minimap
-    while minimapBranch and minimapBranch:GetParent() ~= cluster do
-        minimapBranch = minimapBranch:GetParent()
+    -- Build the path from Minimap up to (but excluding) MinimapCluster.
+    -- Every frame on that path must stay at its normal alpha because it
+    -- contains Minimap; only its siblings and regions may be faded.
+    local path = {}
+    local current = Minimap
+    while current and current ~= cluster do
+        path[#path + 1] = current
+        current = current:GetParent()
     end
 
-    local function add(element)
-        if element ~= minimapBranch and element ~= Minimap and element.SetAlpha then
-            clusterElements[#clusterElements + 1] = {
-                frame = element,
-                originalAlpha = element:GetAlpha(),
-            }
+    local function collectFrom(parent, protectedChild)
+        for _, child in ipairs({ parent:GetChildren() }) do
+            if child ~= protectedChild and child ~= Minimap and child.SetAlpha then
+                clusterElements[#clusterElements + 1] = {
+                    frame = child,
+                    originalAlpha = child:GetAlpha(),
+                }
+            end
+        end
+        for _, region in ipairs({ parent:GetRegions() }) do
+            if region.SetAlpha then
+                clusterElements[#clusterElements + 1] = {
+                    frame = region,
+                    originalAlpha = region:GetAlpha(),
+                }
+            end
         end
     end
-    for _, child in ipairs({ cluster:GetChildren() }) do add(child) end
-    for _, region in ipairs({ cluster:GetRegions() }) do add(region) end
-    cluster:SetAlpha(1)  -- keep parent alpha neutral for the Minimap
+
+    if current == cluster then
+        -- Walk down the protected branch, collecting siblings at each level.
+        -- This includes MinimapCluster.MinimapContainer without touching the
+        -- Minimap's own alpha or physical visibility.
+        for i = #path, 1, -1 do
+            local parent = (i == #path) and cluster or path[i + 1]
+            collectFrom(parent, path[i])
+            parent:SetAlpha(1)
+        end
+    else
+        -- Fallback when another addon reparents Minimap outside the cluster.
+        collectFrom(cluster, nil)
+    end
+    cluster:SetAlpha(1)
 end
 
 local function setPartAlpha(part, value)

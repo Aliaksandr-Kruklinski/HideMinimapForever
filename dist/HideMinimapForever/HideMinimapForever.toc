@@ -7,7 +7,7 @@
 ## IconTexture: Interface\Icons\Ability_Stealth
 
 ## Author: apsedianm
-## Version: 1.1.0
+## Version: 1.1.1
 
 ## X-Category: Minimap
 ## X-License: MIT
