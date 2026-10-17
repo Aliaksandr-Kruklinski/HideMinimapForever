@@ -1,7 +1,6 @@
-
 # HIDE MINIMAP FOREVER 1.0
 
-Target: WoW Forever beta 1.60.1 (Interface 16001)
+**Target:** WoW Forever beta 1.60.1 (Interface 16001)
 
 ## INSTALL
 
@@ -25,14 +24,16 @@ Target: WoW Forever beta 1.60.1 (Interface 16001)
 
 ## DEVELOPMENT
 
-### Otinal Requirements
+### Requirements
 
 - Node.js 16.7 or newer
 - npm (included with Node.js)
 
 Download Node.js: https://nodejs.org/
 
-### Project structure
+No external npm dependencies or `npm install` required.
+
+### Project Structure
 
 ```text
 project/
@@ -41,9 +42,11 @@ project/
 │   ├── HideMinimapForever.lua
 │   └── options.lua
 ├── scripts/
-│   └── build.js
+│   ├── build.js
+│   └── deploy.js
 ├── dist/
 │   └── HideMinimapForever/
+├── config.json
 ├── package.json
 └── README.md
 ```
@@ -62,9 +65,7 @@ The build script will:
 2. Copy all files and subfolders from `src/`.
 3. Generate the addon in `dist/HideMinimapForever/`.
 
-No external npm dependencies or `npm install` required.
-
-### Build output
+### Build Output
 
 ```text
 dist/
@@ -74,11 +75,73 @@ dist/
     └── options.lua
 ```
 
-Copy the generated `HideMinimapForever` folder into your WoW `Interface/AddOns/` directory.
+The generated `HideMinimapForever` folder is ready for distribution or manual installation into WoW's `Interface/AddOns/` directory.
+
+### Deploy
+
+The deployment script automatically installs the addon into your local World of Warcraft installation.
+
+**1. Configure the AddOns directory**
+
+Create a `config.json` file in the project root:
+
+```json
+{
+  "wowAddonsPath": "C:/Games/World of Warcraft/_classic_beta_/Interface/AddOns"
+}
+```
+
+Replace the example path with your actual WoW AddOns directory.
+
+Use forward slashes (`/`) in Windows paths or escape backslashes (`\\`).
+
+**2. Run deployment**
+
+```bash
+npm run deploy
+```
+
+npm automatically executes the scripts in the following order:
+
+1. `predeploy` — runs `npm run build`.
+2. `deploy` — runs `node scripts/deploy.js`.
+
+The deployment process will:
+
+1. Build the latest addon files into `dist/HideMinimapForever/`.
+2. Verify that the build output and configured AddOns directory exist.
+3. Remove the previous installed `HideMinimapForever` folder.
+4. Copy the freshly built addon into the WoW AddOns directory.
+
+If the build fails, deployment will not proceed.
+
+**3. npm scripts**
+
+```json
+{
+  "scripts": {
+    "build": "node scripts/build.js",
+    "predeploy": "npm run build",
+    "deploy": "node scripts/deploy.js"
+  }
+}
+```
+
+**4. Reload WoW**
+
+After deployment, type `/reload` in-game to load the updated addon.
+
+### Development Notes
+
+- `npm run build` — prepare a distributable addon in `dist/`.
+- `npm run deploy` — build and install the addon into the configured WoW directory.
+- `config.json` contains a machine-specific installation path and should be added to `.gitignore`.
+- The deployment replaces the existing installed addon folder, so do not store custom files inside it.
+- No external npm dependencies are required.
 
 ## IMPORTANT
 
-WoW Forever uses retail-style APIs with Interface number 16001.
+WoW Forever uses retail-style APIs with Interface number `16001`.
 
 If the addon is marked outdated, verify the installed build with:
 

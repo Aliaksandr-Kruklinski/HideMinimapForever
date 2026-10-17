@@ -5,6 +5,8 @@
   "private": true,
   "scripts": {
     "build": "node scripts/build.js",
-    "clean": "node scripts/clean.js"
+    "clean": "node scripts/clean.js",
+    "predeploy": "npm run build",
+    "deploy": "node scripts/deploy.js"
   }
 }
