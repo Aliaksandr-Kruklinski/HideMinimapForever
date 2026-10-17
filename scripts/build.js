@@ -1,14 +1,13 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const config = require("../config.json");
 
-const src = path.join(__dirname, "../src");
-const dest = path.join(__dirname, "../dist/HideMinimapForever");
-
-// Clean previous build
-fs.rmSync(dest, { recursive: true, force: true });
+const projectRoot = path.resolve(__dirname, "..");
+const src = path.join(projectRoot, "src");
+const dest = path.join(projectRoot, "dist", config.addonName);
 
 // Copy all files and subfolders
 fs.cpSync(src, dest, { recursive: true });
 
-console.log("Build complete: dist/HideMinimapForever");
+console.log(`Build complete: dist/${config.addonName}`);

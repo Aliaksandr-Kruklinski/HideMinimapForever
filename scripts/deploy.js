@@ -3,12 +3,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const config = require("../config.json");
 
-const addonName = "HideMinimapForever";
 const projectRoot = path.resolve(__dirname, "..");
-
-const src = path.join(projectRoot, "dist", addonName);
+const src = path.join(projectRoot, "dist", config.addonName);
 const addonsDir = path.resolve(config.wowAddonsPath);
-const dest = path.join(addonsDir, addonName);
+const dest = path.join(addonsDir, config.addonName);
 
 // Verify build output
 if (!fs.existsSync(src)) {

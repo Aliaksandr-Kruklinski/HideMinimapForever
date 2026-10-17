@@ -4,8 +4,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "node scripts/build.js",
     "clean": "node scripts/clean.js",
+    "prebuild": "npm run clean",
+    "build": "node scripts/build.js",
     "predeploy": "npm run build",
     "deploy": "node scripts/deploy.js"
   }
